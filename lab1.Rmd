@@ -1,0 +1,122 @@
+---
+title: "Lab 1"
+author: "Claire Madden"
+date: "1/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(kableExtra)
+
+```
+
+Read in noaa_fisheries.csv data
+
+```{r}
+# only convienient structure if you are looking downstream in file pathways : us_landings <- read_csv("data/noaa_fisheries.csv")
+
+us_landings <- read_csv(here("data", "noaa_fisheries.csv"))
+
+```
+
+Now, make a tidy version of the data frame by writing clear and efficient reproduceable code:
+```{r}
+#mutate step overwrites existing column with the same name and replaces existing data with the lowercase version , mutate (make a new column called "state", which is a lowercase version of what is contained in the existing column "state")
+
+#to get rid of $ in dollars_usd and convert column to number
+# in the readr package there are a bunch of packages to parse things, including parse_number
+# if you have something like 12.4g(a) and you just want to pull the numbers out
+
+landings_tidy <- us_landings %>% 
+  janitor::clean_names() %>% 
+  mutate(state = str_to_lower(state),
+         afs_name = str_to_lower(afs_name)) %>% 
+  mutate(dollars_num = parse_number(dollars_usd))
+
+#stop overall wrangling here, any further wrangling that is specific to a species or whatever do in a seperate df
+
+```
+
+Let's just get some information for salmon:
+
+```{r}
+#remove word "aggregate" for any entries that are not specific to the species level in afs_name
+#in a new column called afs_clean, remove the word aggregate from data in the afs_name column
+#then we want to look through and only retain rows that contain the word "salmon", can't use just filter because that requires an exact match and we would have to do one for every species, need to ask true/false is a specified string detected. combined with filter if returns true it will keep the row if false it will delete the row
+#next we want to seperate the group name from the species information using tidyr seperate function. seperate(within afs_clean df, columns to put the data into, specify delimiter)
+
+salmon_landings <- landings_tidy %>% 
+  mutate(afs_clean = str_remove(afs_name, pattern = "aggregate")) %>% 
+  filter(str_detect(afs_clean, pattern = "salmon")) %>% 
+  separate(afs_clean, into = c("group", "species"), sep = ",")
+  
+
+```
+
+Find some grouped summary data:
+- find annual total US landings and dollar value (summing across all states) for each type of salmon using "group_by()" + "summarize()"
+
+```{r}
+#group by year and species
+#create some summary columns
+
+salmon_summary <- salmon_landings %>% 
+  group_by(year, species) %>% 
+  summarize(
+    tot_landings = sum(landings_pounds),
+    tot_value = sum(dollars_num)
+  )
+
+```
+
+Make a graph!
+
+```{r}
+#would only need one or the other group = species (topmost global line) or color = species (in geom_line aes())
+
+salmon_landings_graph <- ggplot(data = salmon_summary,
+                                aes(x = year, y = tot_landings, group = species))+
+  geom_line(aes(color = species))+
+  theme_minimal()
+
+
+salmon_landings_graph
+
+#easier to export and customize graph if it is named with ggplot_save 
+```
+
+Now we will export our graph with ggsave
+
+```{r}
+#save plot named "salmon_landings_graph" and put it in "figures" folder and name it "us_salmon_cm.png", default dimension is 7X7
+ggsave(plot = salmon_landings_graph,
+       here("figures", "us_salmon_cm.png"),
+       height = 5,
+       width = 8)
+
+
+```
+
+Let's make a nice kable table:
+```{r}
+salmon_first_5 <- salmon_summary %>% 
+  head(5)
+
+```
+
+Use kable
+```{r}
+kable(salmon_first_5) %>% 
+  kable_styling(bootstrap_options = "striped", 
+                full_width = FALSE)
+
+```
+
+
+
+
